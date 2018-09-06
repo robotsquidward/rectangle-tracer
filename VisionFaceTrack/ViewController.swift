@@ -68,7 +68,7 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
     fileprivate func setupAVCaptureSession() -> AVCaptureSession? {
         let captureSession = AVCaptureSession()
         do {
-            let inputDevice = try self.configureFrontCamera(for: captureSession)
+            let inputDevice = try self.configureBackCamera(for: captureSession)
             self.configureVideoDataOutput(for: inputDevice.device, resolution: inputDevice.resolution, captureSession: captureSession)
             self.designatePreviewLayer(for: captureSession)
             return captureSession
@@ -111,6 +111,28 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
     
     fileprivate func configureFrontCamera(for captureSession: AVCaptureSession) throws -> (device: AVCaptureDevice, resolution: CGSize) {
         let deviceDiscoverySession = AVCaptureDevice.DiscoverySession(deviceTypes: [.builtInWideAngleCamera], mediaType: .video, position: .front)
+        
+        if let device = deviceDiscoverySession.devices.first {
+            if let deviceInput = try? AVCaptureDeviceInput(device: device) {
+                if captureSession.canAddInput(deviceInput) {
+                    captureSession.addInput(deviceInput)
+                }
+                
+                if let highestResolution = self.highestResolution420Format(for: device) {
+                    try device.lockForConfiguration()
+                    device.activeFormat = highestResolution.format
+                    device.unlockForConfiguration()
+                    
+                    return (device, highestResolution.resolution)
+                }
+            }
+        }
+        
+        throw NSError(domain: "ViewController", code: 1, userInfo: nil)
+    }
+    
+    fileprivate func configureBackCamera(for captureSession: AVCaptureSession) throws -> (device: AVCaptureDevice, resolution: CGSize) {
+        let deviceDiscoverySession = AVCaptureDevice.DiscoverySession(deviceTypes: [.builtInWideAngleCamera], mediaType: .video, position: .back)
         
         if let device = deviceDiscoverySession.devices.first {
             if let deviceInput = try? AVCaptureDeviceInput(device: device) {
