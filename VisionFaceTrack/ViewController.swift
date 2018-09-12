@@ -233,16 +233,16 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         
         switch deviceOrientation {
         case .portraitUpsideDown:
-            return .rightMirrored
+            return .left
             
         case .landscapeLeft:
-            return .downMirrored
+            return .up
             
         case .landscapeRight:
-            return .upMirrored
+            return .down
             
         default:
-            return .leftMirrored
+            return .right
         }
     }
     
