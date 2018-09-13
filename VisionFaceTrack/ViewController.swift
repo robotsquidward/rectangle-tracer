@@ -27,14 +27,20 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
     // Layer UI for drawing Vision results
     var rootLayer: CALayer?
     var detectionOverlayLayer: CALayer?
+    // Rectangle
+    var detectedRectangleShapeLayer: CAShapeLayer?
+    // Face
     var detectedFaceRectangleShapeLayer: CAShapeLayer?
     var detectedFaceLandmarksShapeLayer: CAShapeLayer?
     
     // Vision requests
     private var detectionRequests: [VNDetectFaceRectanglesRequest]?
+    private var rectDetectionRequests: [VNDetectRectanglesRequest]?
     private var trackingRequests: [VNTrackObjectRequest]?
+    private var rectTrackingRequests: [VNTrackRectangleRequest]?
     
     lazy var sequenceRequestHandler = VNSequenceRequestHandler()
+    lazy var rectSequenceRequestHandler = VNSequenceRequestHandler()
     
     // MARK: UIViewController overrides
     
@@ -286,7 +292,86 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         self.setupVisionDrawingLayers()
     }
     
+    // Try preparing a rectangle Vision Request
+    fileprivate func prepareRectangleVisionRequest() {
+        
+        var rectRequests = [VNTrackRectangleRequest]()
+        
+        let rectDetectionRequest = VNDetectRectanglesRequest(completionHandler: { (request, error) in
+            
+            if error == nil {
+                print("RectDetection error: \(String(describing: error)).")
+            }
+            
+            guard let rectDetectionRequest = request as? VNDetectRectanglesRequest,
+                let results = rectDetectionRequest.results as? [VNRectangleObservation] else  {
+                    return
+            }
+            
+            DispatchQueue.main.async {
+                // Add observations to the rect tracking list
+                for observation in results {
+                    let rectTrackingRequest = VNTrackRectangleRequest(rectangleObservation: observation)
+                    rectRequests.append(rectTrackingRequest)
+                }
+                self.rectTrackingRequests = rectRequests
+            }
+        })
+        
+        // Start with detection. Find rectangle, then track it
+        self.rectDetectionRequests = [rectDetectionRequest]
+        
+        self.rectSequenceRequestHandler = VNSequenceRequestHandler()
+        
+        // set up RECTANGLE vision drawing layers
+        self.setupVisionDrawingLayersForRectangles()
+    }
+    
     // MARK: Drawing Vision Observations
+    
+    fileprivate func setupVisionDrawingLayersForRectangles() {
+        let captureDeviceResolution = self.captureDeviceResolution
+        
+        let captureDeviceBounds = CGRect(x: 0,
+                                         y: 0,
+                                         width: captureDeviceResolution.width,
+                                         height: captureDeviceResolution.height)
+        
+        let captureDeviceBoundsCenterPoint = CGPoint(x: captureDeviceBounds.midX,
+                                                     y: captureDeviceBounds.midY)
+        
+        let normalizedCenterPoint = CGPoint(x: 0.5, y: 0.5)
+        
+        guard let rootLayer = self.rootLayer else {
+            self.presentErrorAlert(message: "view was not property initialized")
+            return
+        }
+        
+        let overlayLayer = CALayer()
+        overlayLayer.name = "DetectionOverlay"
+        overlayLayer.masksToBounds = true
+        overlayLayer.anchorPoint = normalizedCenterPoint
+        overlayLayer.bounds = captureDeviceBounds
+        overlayLayer.position = CGPoint(x: rootLayer.bounds.midX, y: rootLayer.bounds.midY)
+        
+        let rectangleShapeLayer = CAShapeLayer()
+        rectangleShapeLayer.name = "RectangleOutlineLayer"
+        rectangleShapeLayer.bounds = captureDeviceBounds
+        rectangleShapeLayer.anchorPoint = normalizedCenterPoint
+        rectangleShapeLayer.position = captureDeviceBoundsCenterPoint
+        rectangleShapeLayer.fillColor = nil
+        rectangleShapeLayer.strokeColor = UIColor.green.withAlphaComponent(0.7).cgColor
+        rectangleShapeLayer.lineWidth = 5
+        rectangleShapeLayer.shadowOpacity = 0.7
+        rectangleShapeLayer.shadowRadius = 5
+        
+        overlayLayer.addSublayer(rectangleShapeLayer)
+        
+        self.detectionOverlayLayer = overlayLayer
+        self.detectedRectangleShapeLayer = rectangleShapeLayer
+        
+        self.updateLayerGeometry()
+    }
     
     fileprivate func setupVisionDrawingLayers() {
         let captureDeviceResolution = self.captureDeviceResolution
