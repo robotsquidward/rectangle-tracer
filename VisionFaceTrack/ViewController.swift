@@ -530,6 +530,13 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         }
     }
     
+    fileprivate func addRectIndicators(to rectanglePath: CGMutablePath, for rectObservation: VNRectangleObservation) {
+        let displaySize = self.captureDeviceResolution
+        
+        let rectBounds = VNImageRectForNormalizedRect(rectObservation.boundingBox, Int(displaySize.width), Int(displaySize.height))
+        rectanglePath.addRect(rectBounds)
+    }
+    
     /// - Tag: DrawPaths
     fileprivate func drawFaceObservations(_ faceObservations: [VNFaceObservation]) {
         guard let faceRectangleShapeLayer = self.detectedFaceRectangleShapeLayer,
@@ -559,6 +566,29 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         CATransaction.commit()
     }
     
+    fileprivate func drawRectangleObservations(_ rectObservations: [VNRectangleObservation]) {
+        guard let rectangleShapeLayer = self.detectedRectangleShapeLayer else {
+            return
+        }
+        
+        CATransaction.begin()
+        
+        CATransaction.setValue(NSNumber(value: true), forKey: kCATransactionDisableActions)
+        
+        let rectanglePath = CGMutablePath()
+        
+        for rectObservation in rectObservations {
+            self.addRectIndicators(to: rectanglePath,
+                                   for: rectObservation)
+        }
+        
+        rectangleShapeLayer.path = rectanglePath
+        
+        self.updateLayerGeometry()
+        
+        CATransaction.commit()
+    }
+    
     // MARK: AVCaptureVideoDataOutputSampleBufferDelegate
     /// - Tag: PerformRequests
     // Handle delegate method callback on receiving a sample buffer.
@@ -578,14 +608,14 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         
         let exifOrientation = self.exifOrientationForCurrentDeviceOrientation()
         
-        guard let requests = self.trackingRequests, !requests.isEmpty else {
+        guard let requests = self.rectTrackingRequests, !requests.isEmpty else {
             // No tracking object detected, so perform initial detection
             let imageRequestHandler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer,
                                                             orientation: exifOrientation,
                                                             options: requestHandlerOptions)
             
             do {
-                guard let detectRequests = self.detectionRequests else {
+                guard let detectRequests = self.rectDetectionRequests else {
                     return
                 }
                 try imageRequestHandler.perform(detectRequests)
@@ -596,7 +626,7 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         }
         
         do {
-            try self.sequenceRequestHandler.perform(requests,
+            try self.rectSequenceRequestHandler.perform(requests,
                                                      on: pixelBuffer,
                                                      orientation: exifOrientation)
         } catch let error as NSError {
@@ -604,7 +634,7 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         }
         
         // Setup the next round of tracking.
-        var newTrackingRequests = [VNTrackObjectRequest]()
+        var newTrackingRequests = [VNTrackRectangleRequest]()
         for trackingRequest in requests {
             
             guard let results = trackingRequest.results else {
@@ -624,7 +654,7 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
                 newTrackingRequests.append(trackingRequest)
             }
         }
-        self.trackingRequests = newTrackingRequests
+        self.rectTrackingRequests = newTrackingRequests
         
         if newTrackingRequests.isEmpty {
             // Nothing to track, so abort.
@@ -632,47 +662,52 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         }
         
         // Perform face landmark tracking on detected faces.
-        var faceLandmarkRequests = [VNDetectFaceLandmarksRequest]()
+        var rectLandmarkRequests = [VNDetectRectanglesRequest]()
         
         // Perform landmark detection on tracked faces.
-        for trackingRequest in newTrackingRequests {
+        for _ in newTrackingRequests {
             
-            let faceLandmarksRequest = VNDetectFaceLandmarksRequest(completionHandler: { (request, error) in
-                
+//            let faceLandmarksRequest = VNDetectFaceLandmarksRequest(completionHandler: { (request, error) in
+//
+//                if error != nil {
+//                    print("FaceLandmarks error: \(String(describing: error)).")
+//                }
+//
+//                guard let landmarksRequest = request as? VNDetectFaceLandmarksRequest,
+//                    let results = landmarksRequest.results as? [VNFaceObservation] else {
+//                        return
+//                }
+//
+//                // Perform all UI updates (drawing) on the main queue, not the background queue on which this handler is being called.
+//                DispatchQueue.main.async {
+//                    self.drawFaceObservations(results)
+//                }
+//            })
+            
+            let rectLandmarksRequest = VNDetectRectanglesRequest { (request, error) in
                 if error != nil {
-                    print("FaceLandmarks error: \(String(describing: error)).")
+                    print("RectLandmarks error")
                 }
                 
-                guard let landmarksRequest = request as? VNDetectFaceLandmarksRequest,
-                    let results = landmarksRequest.results as? [VNFaceObservation] else {
-                        return
+                guard let rectRequest = request as? VNDetectRectanglesRequest,
+                    let results = rectRequest.results as? [VNRectangleObservation] else {
+                        return;
                 }
                 
-                // Perform all UI updates (drawing) on the main queue, not the background queue on which this handler is being called.
                 DispatchQueue.main.async {
-                    self.drawFaceObservations(results)
+                    self.drawRectangleObservations(results)
                 }
-            })
-            
-            guard let trackingResults = trackingRequest.results else {
-                return
             }
-            
-            guard let observation = trackingResults[0] as? VNDetectedObjectObservation else {
-                return
-            }
-            let faceObservation = VNFaceObservation(boundingBox: observation.boundingBox)
-            faceLandmarksRequest.inputFaceObservations = [faceObservation]
             
             // Continue to track detected facial landmarks.
-            faceLandmarkRequests.append(faceLandmarksRequest)
+            rectLandmarkRequests.append(rectLandmarksRequest)
             
             let imageRequestHandler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer,
                                                             orientation: exifOrientation,
                                                             options: requestHandlerOptions)
             
             do {
-                try imageRequestHandler.perform(faceLandmarkRequests)
+                try imageRequestHandler.perform(rectLandmarkRequests)
             } catch let error as NSError {
                 NSLog("Failed to perform FaceLandmarkRequest: %@", error)
             }
