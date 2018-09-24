@@ -299,6 +299,7 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         rectangleShapeLayer.shadowRadius = 5
         
         overlayLayer.addSublayer(rectangleShapeLayer)
+        rootLayer.addSublayer(overlayLayer)
         
         self.detectionOverlayLayer = overlayLayer
         self.detectedRectangleShapeLayer = rectangleShapeLayer
@@ -353,35 +354,7 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         // Cover entire screen UI.
         let rootLayerBounds = rootLayer.bounds
         overlayLayer.position = CGPoint(x: rootLayerBounds.midX, y: rootLayerBounds.midY)
-    }
-    
-    fileprivate func addPoints(in landmarkRegion: VNFaceLandmarkRegion2D, to path: CGMutablePath, applying affineTransform: CGAffineTransform, closingWhenComplete closePath: Bool) {
-        let pointCount = landmarkRegion.pointCount
-        if pointCount > 1 {
-            let points: [CGPoint] = landmarkRegion.normalizedPoints
-            path.move(to: points[0], transform: affineTransform)
-            path.addLines(between: points, transform: affineTransform)
-            if closePath {
-                path.addLine(to: points[0], transform: affineTransform)
-                path.closeSubpath()
-            }
-        }
-    }
-    
-    fileprivate func addRectIndicators(to rectanglePath: CGMutablePath, for rectObservation: VNRectangleObservation) {
-        
-        print("topleft: \(rectObservation.topLeft)")
-        print("topright: \(rectObservation.topRight)")
-        print("bottomright: \(rectObservation.bottomRight)")
-        print("bottomleft: \(rectObservation.bottomLeft)")
-        
-        let displaySize = self.captureDeviceResolution
-        
-        let rectBounds = VNImageRectForNormalizedRect(rectObservation.boundingBox, Int(displaySize.width), Int(displaySize.height))
-    
-        print("RectBounds: \(rectBounds.dictionaryRepresentation)")
-        rectanglePath.addRect(rectBounds)
-        
+        print("Completed overlay refresh")
     }
     
     fileprivate func drawRectangleObservations(_ rectObservations: [VNRectangleObservation]) {
@@ -398,11 +371,21 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         let rectanglePath = CGMutablePath()
         
         for rectObservation in rectObservations {
-            self.addRectIndicators(to: rectanglePath,
-                                   for: rectObservation)
+            print("topleft: \(rectObservation.topLeft)")
+            print("topright: \(rectObservation.topRight)")
+            print("bottomright: \(rectObservation.bottomRight)")
+            print("bottomleft: \(rectObservation.bottomLeft)")
+            
+            let displaySize = self.captureDeviceResolution
+            
+            let rectBounds = VNImageRectForNormalizedRect(rectObservation.boundingBox, Int(displaySize.width), Int(displaySize.height))
+            
+            print("RectBounds: \(rectBounds.dictionaryRepresentation)")
+            rectanglePath.addRect(rectBounds)
         }
         
         rectangleShapeLayer.path = rectanglePath
+        self.detectedRectangleShapeLayer = rectangleShapeLayer
         
         self.updateLayerGeometry()
         
