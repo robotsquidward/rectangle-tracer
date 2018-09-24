@@ -354,9 +354,11 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         // Cover entire screen UI.
         let rootLayerBounds = rootLayer.bounds
         overlayLayer.position = CGPoint(x: rootLayerBounds.midX, y: rootLayerBounds.midY)
-        print("Completed overlay refresh")
     }
     
+    /*
+        shamu
+    */
     fileprivate func drawRectangleObservations(_ rectObservations: [VNRectangleObservation]) {
         
         guard let rectangleShapeLayer = self.detectedRectangleShapeLayer else {
@@ -371,9 +373,17 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         let rectanglePath = CGMutablePath()
         
         for rectObservation in rectObservations {
-            let displaySize = self.captureDeviceResolution
-            let rectBounds = VNImageRectForNormalizedRect(rectObservation.boundingBox, Int(displaySize.width), Int(displaySize.height))
-            rectanglePath.addRect(rectBounds)
+            //let displaySize = self.captureDeviceResolution
+            //let rectBounds = VNImageRectForNormalizedRect(rectObservation.boundingBox, Int(displaySize.width), Int(displaySize.height))
+            //rectanglePath.addRect(rectBounds)
+
+            
+            let points = [rectObservation.bottomLeft, rectObservation.bottomRight, rectObservation.topRight, rectObservation.topLeft]
+            let convertedPoints = points.map { self.convertFromCamera($0) }
+            let rectPath = getBoxPath(points: convertedPoints)
+            print("points   : \(points)")
+            print("converted: \(convertedPoints)")
+            rectanglePath.addPath(rectPath)
         }
         
         rectangleShapeLayer.path = rectanglePath
@@ -382,6 +392,26 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         self.updateLayerGeometry()
         
         CATransaction.commit()
+    }
+    
+    func convertFromCamera(_ point: CGPoint) -> CGPoint {
+        
+        let transform = CGAffineTransform.identity
+            .scaledBy(x: 1, y: -1)
+            .translatedBy(x: 0, y: -previewView!.frame.size.height)
+            .scaledBy(x: previewView!.frame.size.width, y: previewView!.frame.size.height)
+        
+        return point.applying(transform)
+        
+    }
+    
+    private func getBoxPath(points: [CGPoint]) -> CGPath {
+        let path = UIBezierPath()
+        path.move(to: points.last!)
+        points.forEach { point in
+            path.addLine(to: point)
+        }
+        return path.cgPath
     }
     
     // MARK: AVCaptureVideoDataOutputSampleBufferDelegate
