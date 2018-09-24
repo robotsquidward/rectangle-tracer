@@ -348,7 +348,7 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         
         // Scale and mirror the image to ensure upright presentation.
         let affineTransform = CGAffineTransform(rotationAngle: radiansForDegrees(rotation))
-            .scaledBy(x: scaleX, y: scaleY)
+            .scaledBy(x: scaleX, y: -scaleY)
         overlayLayer.setAffineTransform(affineTransform)
         
         // Cover entire screen UI.
@@ -371,16 +371,8 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         let rectanglePath = CGMutablePath()
         
         for rectObservation in rectObservations {
-            print("topleft: \(rectObservation.topLeft)")
-            print("topright: \(rectObservation.topRight)")
-            print("bottomright: \(rectObservation.bottomRight)")
-            print("bottomleft: \(rectObservation.bottomLeft)")
-            
             let displaySize = self.captureDeviceResolution
-            
             let rectBounds = VNImageRectForNormalizedRect(rectObservation.boundingBox, Int(displaySize.width), Int(displaySize.height))
-            
-            print("RectBounds: \(rectBounds.dictionaryRepresentation)")
             rectanglePath.addRect(rectBounds)
         }
         
